@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stytch DF → n8n demo</title>
+
+  <!-- Stytch Device-Fingerprint -->
+  <script src="https://js.stytch.com/device-fingerprint/v1/device-fingerprint.js" defer></script>
+
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:40px;background:#f9f9f9}
+    #log{background:#fff;border:1px solid #ddd;padding:12px;border-radius:4px;white-space:pre-wrap}
+    button{padding:10px 20px;font-size:16px}
+  </style>
+</head>
+<body>
+  <h2>Stytch + n8n – Step ① (Company & visitor-id)</h2>
+  <p>Click “Accept” to allow device fingerprinting and company identification.</p>
+  <button id="acceptBtn">Accept</button>
+  <h3>Log</h3>
+  <div id="log">Waiting for consent …</div>
+
+  <script>
+    // ===== YOUR STYTCH + N8N CREDENTIALS =====
+    const STYTCH_PUBLIC_TOKEN = 'project-test-20037412-b601-453a-a155-2db3830abee7';
+    const N8N_WEBHOOK_URL   = 'https://n8n-n8n.z7ixmo.easypanel.host/webhook/0e224349-6b1d-41a4-bb48-deb8a4ee6248';
+
+    const log = txt => document.getElementById('log').textContent += '\n' + txt;
+
+    document.getElementById('acceptBtn').addEventListener('click', async () => {
+      log('Consent granted – loading Stytch …');
+
+      // wait for lib
+      while (typeof StytchDFP === 'undefined') await new Promise(r => setTimeout(r, 200));
+
+      // 1.  get fingerprint
+      const fp = await StytchDFP({ public_token: STYTCH_PUBLIC_TOKEN, persist: true }).fingerprint();
+      log('visitor_id = ' + fp.visitor_id);
+
+      // 2.  build payload
+      const payload = {
+        visitor_id: fp.visitor_id,
+        page:       window.location.href,
+        ua:         navigator.userAgent,
+        ts:         Date.now(),
+        // simple IP injection if you later Jekyll/PHP this file
+        ip:         '<?= $_SERVER["HTTP_X_FORWARDED_FOR"] ?? $_SERVER["REMOTE_ADDR"] ?? "" ?>'
+      };
+
+      // 3.  send to n8n
+      try {
+        const res = await fetch(N8N_WEBHOOK_URL, {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body   : JSON.stringify(payload)
+        });
+        log(res.ok ? '✅ Sent to n8n' : '❌ n8n error – ' + res.status);
+      } catch (e) {
+        log('❌ Network error – ' + e.message);
+      }
+    });
+  </script>
+</body>
+</html>
